@@ -10,6 +10,7 @@
 
 #include <immer/algorithm.hpp>
 #include <immer/detail/arrays/node.hpp>
+#include <stdexcept>
 
 namespace immer {
 namespace detail {
