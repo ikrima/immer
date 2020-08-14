@@ -34,6 +34,12 @@ struct rbtree
     node_t* root;
     node_t* tail;
 
+    constexpr static size_t max_size()
+    {
+        auto S = sizeof(size_t) * 8;
+        return (size_t{1} << BL) * ipow(size_t{1} << B, (S - BL) / B);
+    }
+
     static const rbtree& empty()
     {
         static const rbtree empty_{
@@ -485,7 +491,7 @@ struct rbtree
     {
 #if IMMER_DEBUG_DEEP_CHECK
         if (tail_size() > 0)
-            assert(tail->check(0, tail_size()));
+            assert(tail->check(endshift<B, BL>, tail_size()));
 #endif
         return true;
     }

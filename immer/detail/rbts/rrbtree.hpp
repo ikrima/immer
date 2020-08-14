@@ -38,6 +38,13 @@ struct rrbtree
     node_t* root;
     node_t* tail;
 
+    constexpr static size_t max_size()
+    {
+        auto S = sizeof(size_t) * 8;
+        return ((size_t{1} << BL) - std::min(size_t{BL}, size_t{2})) *
+               ipow((size_t{1} << B) - 2, (S - BL) / B);
+    }
+
     static const rrbtree& empty()
     {
         static const rrbtree empty_{
@@ -318,7 +325,9 @@ struct rrbtree
                     new_root->inner()[1] = new_path;
                     new_root->relaxed()->d.sizes[0] = size;
                     new_root->relaxed()->d.sizes[1] = size + tail_size;
-                    new_root->relaxed()->d.count    = 2u;
+                    assert(size);
+                    assert(tail_size);
+                    new_root->relaxed()->d.count = 2u;
                 } catch (...) {
                     node_t::delete_inner_r(new_root, 2);
                     throw;
@@ -362,8 +371,10 @@ struct rrbtree
                     new_root->inner()[1] = new_path;
                     new_root->relaxed()->d.sizes[0] = tail_off;
                     new_root->relaxed()->d.sizes[1] = tail_off + tail_size;
-                    new_root->relaxed()->d.count    = 2u;
-                    root                            = new_root;
+                    assert(tail_off);
+                    assert(tail_size);
+                    new_root->relaxed()->d.count = 2u;
+                    root                         = new_root;
                     shift += B;
                 } catch (...) {
                     node_t::delete_inner_r_e(new_root);
@@ -656,12 +667,11 @@ struct rrbtree
             auto new_shift = get<0>(r);
             return {size - elems, new_shift, new_root, tail->inc()};
         }
-        return *this;
     }
 
     rrbtree concat(const rrbtree& r) const
     {
-        assert(r.size < (std::numeric_limits<size_t>::max() - size));
+        assert(r.size + size <= max_size());
         using std::get;
         if (size == 0)
             return r;
@@ -801,12 +811,11 @@ struct rrbtree
                                      r.tail_offset());
                 IMMER_ASSERT_TAGGED(concated.shift() ==
                                     concated.node()->compute_shift());
-                assert(concated.node()->check(concated.shift(),
-                                              l.size + r.tail_offset()));
                 l.size += r.size;
                 l.shift = concated.shift();
                 l.root  = concated.node();
                 l.tail  = r.tail;
+                assert(l.check_tree());
             } else {
                 auto tail_offst = l.tail_offset();
                 auto tail_size  = l.size - tail_offst;
@@ -816,12 +825,15 @@ struct rrbtree
                      concated.shift(),
                      concated.node(),
                      r.tail->inc()};
+                assert(l.check_tree());
                 return;
             }
         } else {
             if (supports_transient_concat) {
                 auto tail_offst = l.tail_offset();
                 auto tail_size  = l.size - tail_offst;
+                assert(l.check_tree());
+                assert(r.check_tree());
                 auto concated =
                     concat_trees_mut(el,
                                      el,
@@ -836,12 +848,11 @@ struct rrbtree
                                      r.tail_offset());
                 IMMER_ASSERT_TAGGED(concated.shift() ==
                                     concated.node()->compute_shift());
-                assert(concated.node()->check(concated.shift(),
-                                              l.size + r.tail_offset()));
                 l.size += r.size;
                 l.shift = concated.shift();
                 l.root  = concated.node();
                 l.tail  = r.tail;
+                assert(l.check_tree());
             } else {
                 auto tail_offst = l.tail_offset();
                 auto tail_size  = l.size - tail_offst;
@@ -927,7 +938,6 @@ struct rrbtree
                     node_t::delete_leaf(add_tail, branches<BL>);
                     throw;
                 }
-                return;
             }
         } else if (l.tail_offset() == 0) {
             if (supports_transient_concat) {
@@ -944,11 +954,10 @@ struct rrbtree
                                      r.tail_offset());
                 IMMER_ASSERT_TAGGED(concated.shift() ==
                                     concated.node()->compute_shift());
-                assert(concated.node()->check(concated.shift(),
-                                              l.size + r.tail_offset()));
                 r.size += l.size;
                 r.shift = concated.shift();
                 r.root  = concated.node();
+                assert(r.check_tree());
             } else {
                 auto tail_offst = l.tail_offset();
                 auto tail_size  = l.size - tail_offst;
@@ -978,11 +987,10 @@ struct rrbtree
                                      r.tail_offset());
                 IMMER_ASSERT_TAGGED(concated.shift() ==
                                     concated.node()->compute_shift());
-                assert(concated.node()->check(concated.shift(),
-                                              l.size + r.tail_offset()));
                 r.size += l.size;
                 r.shift = concated.shift();
                 r.root  = concated.node();
+                assert(r.check_tree());
                 return;
             } else {
                 auto tail_offst = l.tail_offset();
@@ -1076,13 +1084,13 @@ struct rrbtree
                                                  r.tail_offset());
                 IMMER_ASSERT_TAGGED(concated.shift() ==
                                     concated.node()->compute_shift());
-                assert(concated.node()->check(concated.shift(),
-                                              l.size + r.tail_offset()));
                 l.size += r.size;
                 l.shift = concated.shift();
                 l.root  = concated.node();
                 l.tail  = r.tail;
+                assert(l.check_tree());
                 r.hard_reset();
+                return;
             } else {
                 auto tail_offst = l.tail_offset();
                 auto tail_size  = l.size - tail_offst;
@@ -1111,13 +1119,13 @@ struct rrbtree
                                                  r.tail_offset());
                 IMMER_ASSERT_TAGGED(concated.shift() ==
                                     concated.node()->compute_shift());
-                assert(concated.node()->check(concated.shift(),
-                                              l.size + r.tail_offset()));
                 l.size += r.size;
                 l.shift = concated.shift();
                 l.root  = concated.node();
                 l.tail  = r.tail;
+                assert(l.check_tree());
                 r.hard_reset();
+                return;
             } else {
                 auto tail_offst = l.tail_offset();
                 auto tail_size  = l.size - tail_offst;
@@ -1133,6 +1141,7 @@ struct rrbtree
                      concated.shift(),
                      concated.node(),
                      r.tail->inc()};
+                return;
             }
         }
     }
@@ -1202,7 +1211,6 @@ struct rrbtree
                     node_t::delete_leaf(add_tail, branches<BL>);
                     throw;
                 }
-                return;
             }
         } else if (l.tail_offset() == 0) {
             if (supports_transient_concat) {
@@ -1223,6 +1231,7 @@ struct rrbtree
                 r.size += l.size;
                 r.shift = concated.shift();
                 r.root  = concated.node();
+                assert(r.check_tree());
                 l.hard_reset();
             } else {
                 auto tail_offst = l.tail_offset();
@@ -1257,6 +1266,7 @@ struct rrbtree
                 r.size += l.size;
                 r.shift = concated.shift();
                 r.root  = concated.node();
+                assert(r.check_tree());
                 l.hard_reset();
             } else {
                 auto tail_offst = l.tail_offset();

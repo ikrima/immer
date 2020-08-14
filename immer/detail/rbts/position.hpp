@@ -779,7 +779,10 @@ struct regular_sub_pos
     shift_t shift() const { return shift_; }
     count_t index(size_t idx) const { return (idx >> shift_) & mask<B>; }
     count_t subindex(size_t idx) const { return idx >> shift_; }
-    size_t size_before(count_t offset) const { return offset << shift_; }
+    size_t size_before(count_t offset) const
+    {
+        return size_t{offset} << shift_;
+    }
     size_t this_size() const { return size_; }
 
     auto size(count_t offset)
@@ -800,9 +803,12 @@ struct regular_sub_pos
         if (n) {
             auto last = offset + n - 1;
             auto e    = sizes + n - 1;
-            for (; sizes != e; ++sizes)
+            for (; sizes != e; ++sizes) {
                 init = *sizes = init + (size_t{1} << shift_);
+                assert(init);
+            }
             *sizes = init + size(last);
+            assert(*sizes);
         }
     }
 
@@ -945,7 +951,7 @@ struct regular_sub_pos
         auto offset  = count() - 1;
         auto child   = node_->inner()[offset];
         auto is_leaf = shift_ == BL;
-        auto lsize   = size_ - (offset << shift_);
+        auto lsize   = size_ - (size_t{offset} << shift_);
         return is_leaf ? make_leaf_sub_pos(child, lsize).visit(v, args...)
                        : make_regular_sub_pos(child, shift_ - B, lsize)
                              .visit(v, args...);
@@ -1143,7 +1149,7 @@ struct full_pos
 
     count_t count() const { return branches<B>; }
     node_t* node() const { return node_; }
-    size_t size() const { return branches<B> << shift_; }
+    size_t size() const { return branches<B, size_t> << shift_; }
     shift_t shift() const { return shift_; }
     count_t index(size_t idx) const { return (idx >> shift_) & mask<B>; }
     count_t subindex(size_t idx) const { return idx >> shift_; }
@@ -1152,13 +1158,18 @@ struct full_pos
     {
         return size_t{1} << shift_;
     }
-    size_t size_before(count_t offset) const { return offset << shift_; }
+    size_t size_before(count_t offset) const
+    {
+        return size_t{offset} << shift_;
+    }
 
     void copy_sizes(count_t offset, count_t n, size_t init, size_t* sizes)
     {
         auto e = sizes + n;
-        for (; sizes != e; ++sizes)
+        for (; sizes != e; ++sizes) {
             init = *sizes = init + (size_t{1} << shift_);
+            assert(init);
+        }
     }
 
     template <typename Visitor, typename... Args>
@@ -1330,7 +1341,7 @@ struct full_pos
         assert(offset_hint == index(idx));
         auto is_leaf = shift_ == BL;
         auto child   = node_->inner()[offset_hint];
-        auto lsize   = offset_hint << shift_;
+        auto lsize   = size_t{offset_hint} << shift_;
         return is_leaf
                    ? make_full_leaf_pos(child).visit(v, idx - lsize, args...)
                    : make_full_pos(child, shift_ - B)
@@ -1447,7 +1458,8 @@ struct relaxed_pos
         for (; sizes != e; ++sizes, ++these) {
             auto this_size = *these;
             init = *sizes = init + (this_size - prev);
-            prev          = this_size;
+            assert(init);
+            prev = this_size;
         }
     }
 
@@ -1609,6 +1621,7 @@ struct relaxed_pos
                 make_leaf_sub_pos(p[i], relaxed_->d.sizes[i] - s)
                     .visit(v, args...);
                 s = relaxed_->d.sizes[i];
+                assert(s);
             }
         } else {
             auto ss = shift_ - B;
@@ -1616,6 +1629,7 @@ struct relaxed_pos
                 visit_maybe_relaxed_sub(
                     p[i], ss, relaxed_->d.sizes[i] - s, v, args...);
                 s = relaxed_->d.sizes[i];
+                assert(s);
             }
         }
     }
@@ -1639,6 +1653,7 @@ struct relaxed_pos
                 make_leaf_sub_pos(p[i], relaxed_->d.sizes[i] - s)
                     .visit(v, args...);
                 s = relaxed_->d.sizes[i];
+                assert(s);
             }
         } else {
             auto ss = shift_ - B;
@@ -1646,6 +1661,7 @@ struct relaxed_pos
                 visit_maybe_relaxed_sub(
                     p[i], ss, relaxed_->d.sizes[i] - s, v, args...);
                 s = relaxed_->d.sizes[i];
+                assert(s);
             }
         }
     }
@@ -1739,6 +1755,7 @@ struct relaxed_pos
         auto child      = node_->inner()[0];
         auto child_size = relaxed_->d.sizes[0];
         auto is_leaf    = shift_ == BL;
+        assert(child_size);
         return is_leaf ? make_leaf_sub_pos(child, child_size).visit(v, args...)
                        : visit_maybe_relaxed_sub(
                              child, shift_ - B, child_size, v, args...);

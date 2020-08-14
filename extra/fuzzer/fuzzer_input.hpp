@@ -8,10 +8,14 @@
 
 #pragma once
 
-#include <stdexcept>
 #include <cstdint>
+#include <memory>
+#include <stdexcept>
 
-struct no_more_input : std::exception {};
+struct no_more_input : std::exception
+{};
+
+constexpr auto fuzzer_input_max_size = 1 << 16;
 
 struct fuzzer_input
 {
@@ -20,7 +24,8 @@ struct fuzzer_input
 
     const std::uint8_t* next(std::size_t size)
     {
-        if (size_ < size) throw no_more_input{};
+        if (size_ < size)
+            throw no_more_input{};
         auto r = data_;
         data_ += size;
         size_ -= size;
@@ -29,16 +34,21 @@ struct fuzzer_input
 
     const std::uint8_t* next(std::size_t size, std::size_t align)
     {
-        auto rem = size % align;
-        if (rem) next(align - rem);
+        auto& p = const_cast<void*&>(reinterpret_cast<const void*&>(data_));
+        auto r  = std::align(align, size, p, size_);
+        if (r == nullptr)
+            throw no_more_input{};
         return next(size);
     }
 
     template <typename Fn>
     int run(Fn step)
     {
+        if (size_ > fuzzer_input_max_size)
+            return 0;
         try {
-            while (step(*this));
+            while (step(*this))
+                continue;
         } catch (const no_more_input&) {};
         return 0;
     }
@@ -54,7 +64,7 @@ template <typename T, typename Cond>
 T read(fuzzer_input& fz, Cond cond)
 {
     auto x = read<T>(fz);
-    return cond(x)
-        ? x
-        : read<T>(fz, cond);
+    while (!cond(x))
+        x = read<T>(fz);
+    return x;
 }

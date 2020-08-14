@@ -21,11 +21,15 @@ include(ImmerUtils)
 #  Options
 #  =======
 
-option(ENABLE_SANITIZE "compile with sanitizers enabled")
+option(ENABLE_ASAN "compile with address sanitizer enabled")
+option(ENABLE_MSAN "compile with memory sanitizer enabled")
+option(ENABLE_LSAN "compile with leak sanitizer enabled")
+option(ENABLE_UBSAN "compile with undefined behavior sanitizer enabled")
 option(ENABLE_COVERAGE "compile with test coverage support")
 option(DISABLE_WERROR "enable --werror")
 option(DISABLE_FREE_LIST "disables the free list heap")
 option(DISABLE_THREAD_SAFETY "disables thread safety by default")
+option(CHECK_FUZZERS "Add fuzzers as part of make check")
 
 option(ENABLE_PYTHON "enable building python module" off)
 option(ENABLE_GUILE "enable building guile module" off)
@@ -41,9 +45,19 @@ set(CXX_STANDARD 14 CACHE STRING "c++ standard number")
 set(CMAKE_CXX_STANDARD ${CXX_STANDARD})
 set(CMAKE_CXX_STANDARD_REQUIRED on)
 
-if (ENABLE_SANITIZE)
-  set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -fsanitize=address -fsanitize=leak")
+if (ENABLE_ASAN)
+  set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -fsanitize=address")
 endif()
+if (ENABLE_LSAN)
+  set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -fsanitize=leak")
+endif()
+if (ENABLE_UBSAN)
+  set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -fsanitize=undefined")
+endif()
+if (ENABLE_MSAN)
+  set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -fsanitize=memory")
+endif()
+
 if (NOT MSVC AND NOT DISABLE_WERROR)
   set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -Werror")
 endif()
@@ -104,7 +118,8 @@ target_compile_definitions(immer-dev INTERFACE
   -DIMMER_HAS_LIBGC=1
   -DIMMER_NO_FREE_LIST=${DISABLE_FREE_LIST}
   -DIMMER_NO_THREAD_SAFETY=${DISABLE_THREAD_SAFETY}
-  -DIMMER_SLOW_TESTS=${CHECK_SLOW_TESTS})
+  -DIMMER_SLOW_TESTS=${CHECK_SLOW_TESTS}
+  -DFMT_HEADER_ONLY=1)
 if (ENABLE_COVERAGE)
   target_compile_options(immer-dev INTERFACE "--coverage")
   target_link_libraries(immer-dev INTERFACE "--coverage")
